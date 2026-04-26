@@ -5,5 +5,8 @@ export type { ApiClientConfig, ApiClient } from "./client/api-client.js";
 // Errors
 export { ApiError } from "./client/errors.js";
 
-// Types placeholder - will be populated by generate:schema
+// Auth Provider + Hook
+export { AuthProvider, useAuth } from "./providers/auth-provider.js";
+
+// Types
 export type {} from "./types/generated.js";
