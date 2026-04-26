@@ -143,6 +143,19 @@ function createApiClient(config) {
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { jsx } from "react/jsx-runtime";
 var AuthContext = createContext(null);
+function normalizeUser(raw) {
+  return {
+    id: raw.id,
+    email: raw.email,
+    first_name: raw.first_name,
+    last_name: raw.last_name,
+    is_active: raw.is_active ?? true,
+    is_verified: raw.is_verified ?? raw.email_verified ?? false,
+    email_verified: raw.email_verified ?? raw.is_verified ?? false,
+    role: raw.role ?? "user",
+    created_at: raw.created_at ?? ""
+  };
+}
 function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }) {
   const [accessToken, setAccessToken] = useState(tokenStorage?.getAccessToken() ?? null);
   const [refreshToken, setRefreshToken] = useState(tokenStorage?.getRefreshToken() ?? null);
@@ -167,7 +180,7 @@ function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }) {
   });
   useEffect(() => {
     if (accessToken) {
-      api.auth.me().then((u) => setUser(u)).catch(() => setUser(null)).finally(() => setIsLoading(false));
+      api.auth.me().then((u) => setUser(normalizeUser(u))).catch(() => setUser(null)).finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
     }
@@ -179,7 +192,7 @@ function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }) {
     tokenStorage?.setAccessToken(data.access_token);
     tokenStorage?.setRefreshToken(data.refresh_token);
     const me = await api.auth.me();
-    setUser(me);
+    setUser(normalizeUser(me));
   }, [api]);
   const register = useCallback(async (data) => {
     await api.auth.register(data);
@@ -209,9 +222,11 @@ function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }) {
     {
       value: {
         user,
+        loading: isLoading,
         isLoading,
         isAuthenticated: !!user,
         api,
+        apiClient: api,
         login,
         register,
         logout,

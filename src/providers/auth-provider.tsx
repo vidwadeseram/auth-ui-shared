@@ -8,13 +8,18 @@ interface AuthUser {
   last_name: string;
   is_active: boolean;
   is_verified: boolean;
+  email_verified: boolean;
+  role: string;
+  created_at: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
+  loading: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
   api: ApiClient;
+  apiClient: ApiClient;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; first_name: string; last_name: string }) => Promise<void>;
   logout: () => Promise<void>;
@@ -34,6 +39,20 @@ interface AuthProviderProps {
     setAccessToken: (token: string | null) => void;
     getRefreshToken: () => string | null;
     setRefreshToken: (token: string | null) => void;
+  };
+}
+
+function normalizeUser(raw: any): AuthUser {
+  return {
+    id: raw.id,
+    email: raw.email,
+    first_name: raw.first_name,
+    last_name: raw.last_name,
+    is_active: raw.is_active ?? true,
+    is_verified: raw.is_verified ?? raw.email_verified ?? false,
+    email_verified: raw.email_verified ?? raw.is_verified ?? false,
+    role: raw.role ?? "user",
+    created_at: raw.created_at ?? "",
   };
 }
 
@@ -64,7 +83,7 @@ export function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }:
   useEffect(() => {
     if (accessToken) {
       api.auth.me()
-        .then((u) => setUser(u))
+        .then((u) => setUser(normalizeUser(u)))
         .catch(() => setUser(null))
         .finally(() => setIsLoading(false));
     } else {
@@ -79,7 +98,7 @@ export function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }:
     tokenStorage?.setAccessToken(data.access_token);
     tokenStorage?.setRefreshToken(data.refresh_token);
     const me = await api.auth.me();
-    setUser(me);
+    setUser(normalizeUser(me));
   }, [api]);
 
   const register = useCallback(async (data: { email: string; password: string; first_name: string; last_name: string }) => {
@@ -113,9 +132,11 @@ export function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }:
     <AuthContext.Provider
       value={{
         user,
+        loading: isLoading,
         isLoading,
         isAuthenticated: !!user,
         api,
+        apiClient: api,
         login,
         register,
         logout,
