@@ -20,7 +20,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "generate:schema": "node dist/cli/generate-schema.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "commander": "^13.0.0",
