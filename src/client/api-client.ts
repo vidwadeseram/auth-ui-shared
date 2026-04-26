@@ -141,7 +141,8 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
         config.setAccessToken(json.data.access_token);
         config.setRefreshToken(json.data.refresh_token);
         return json.data.access_token as string;
-      } catch {
+      } catch (err) {
+        console.warn("Token refresh failed:", err instanceof Error ? err.message : err);
         config.onAuthFailure?.();
         return null;
       } finally {

@@ -2,16 +2,19 @@
 
 import fs from "fs";
 import path from "path";
+import { Command } from "commander";
 
-const args = process.argv.slice(2);
-let url = "";
-let output = "src/types/generated.ts";
+const program = new Command()
+  .name("generate-schema")
+  .description("Generate Zod schemas from an OpenAPI spec")
+  .option("--url <url>", "OpenAPI spec URL (base URL or full path)")
+  .option("-o, --output <path>", "Output file path", "src/types/generated.ts")
+  .parse();
 
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--url" && args[i + 1]) url = args[++i];
-  if (args[i] === "-o" && args[i + 1]) output = args[++i];
-  if (args[i] === "--output" && args[i + 1]) output = args[++i];
-}
+const opts = program.opts();
+
+let url: string = opts.url || "";
+const output: string = opts.output;
 
 if (!url) {
   url = process.env.API_URL
