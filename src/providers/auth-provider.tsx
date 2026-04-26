@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { createApiClient, type ApiClient } from "../client/api-client.js";
+import type { UserData } from "../types/api.js";
 
 interface AuthUser {
   id: string;
@@ -42,15 +43,15 @@ interface AuthProviderProps {
   };
 }
 
-function normalizeUser(raw: any): AuthUser {
+function normalizeUser(raw: UserData): AuthUser {
   return {
     id: raw.id,
     email: raw.email,
     first_name: raw.first_name,
     last_name: raw.last_name,
     is_active: raw.is_active ?? true,
-    is_verified: raw.is_verified ?? raw.email_verified ?? false,
-    email_verified: raw.email_verified ?? raw.is_verified ?? false,
+    is_verified: raw.email_verified ?? false,
+    email_verified: raw.email_verified ?? false,
     role: raw.role ?? "user",
     created_at: raw.created_at ?? "",
   };
@@ -83,7 +84,7 @@ export function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }:
   useEffect(() => {
     if (accessToken) {
       api.auth.me()
-        .then((u) => setUser(normalizeUser(u)))
+        .then((u) => setUser(normalizeUser(u.data)))
         .catch(() => setUser(null))
         .finally(() => setIsLoading(false));
     } else {
@@ -92,13 +93,13 @@ export function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }:
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = await api.auth.login({ email, password });
-    setAccessToken(data.access_token);
-    setRefreshToken(data.refresh_token);
-    tokenStorage?.setAccessToken(data.access_token);
-    tokenStorage?.setRefreshToken(data.refresh_token);
+    const res = await api.auth.login({ email, password });
+    setAccessToken(res.data.access_token);
+    setRefreshToken(res.data.refresh_token);
+    tokenStorage?.setAccessToken(res.data.access_token);
+    tokenStorage?.setRefreshToken(res.data.refresh_token);
     const me = await api.auth.me();
-    setUser(normalizeUser(me));
+    setUser(normalizeUser(me.data));
   }, [api]);
 
   const register = useCallback(async (data: { email: string; password: string; first_name: string; last_name: string }) => {

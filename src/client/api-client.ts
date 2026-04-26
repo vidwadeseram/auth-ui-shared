@@ -1,4 +1,6 @@
 import { ApiError } from "./errors.js";
+import type { DataResponse, ListResponse, UserData, RoleData, PermissionData, TenantData, TenantMemberData } from "../types/api.js";
+import type { TokenData, MessageResponse } from "../types/generated.js";
 
 export interface ApiClientConfig {
   baseUrl: string;
@@ -10,46 +12,45 @@ export interface ApiClientConfig {
 }
 
 export interface ApiClient {
-  // Generic HTTP escape hatches — return RAW JSON body (not unwrapped to .data)
-  get<T = any>(path: string): Promise<T>;
-  post<T = any>(path: string, body?: unknown): Promise<T>;
-  patch<T = any>(path: string, body?: unknown): Promise<T>;
-  delete<T = any>(path: string, body?: unknown): Promise<T>;
+  get<T = unknown>(path: string): Promise<T>;
+  post<T = unknown>(path: string, body?: unknown): Promise<T>;
+  patch<T = unknown>(path: string, body?: unknown): Promise<T>;
+  delete<T = unknown>(path: string, body?: unknown): Promise<T>;
   auth: {
-    register: (data: { email: string; password: string; first_name: string; last_name: string }) => Promise<any>;
-    login: (data: { email: string; password: string }) => Promise<any>;
-    logout: (refreshToken: string) => Promise<any>;
-    refresh: (refreshToken: string) => Promise<any>;
-    me: () => Promise<any>;
-    verifyEmail: (token: string) => Promise<any>;
-    forgotPassword: (email: string) => Promise<any>;
-    resetPassword: (token: string, newPassword: string) => Promise<any>;
+    register: (data: { email: string; password: string; first_name: string; last_name: string }) => Promise<DataResponse<{ user: UserData; message: string }>>;
+    login: (data: { email: string; password: string }) => Promise<DataResponse<TokenData>>;
+    logout: (refreshToken: string) => Promise<MessageResponse>;
+    refresh: (refreshToken: string) => Promise<DataResponse<TokenData>>;
+    me: () => Promise<DataResponse<UserData>>;
+    verifyEmail: (token: string) => Promise<MessageResponse>;
+    forgotPassword: (email: string) => Promise<MessageResponse>;
+    resetPassword: (token: string, newPassword: string) => Promise<MessageResponse>;
   };
   admin: {
-    listRoles: () => Promise<any>;
-    listPermissions: () => Promise<any>;
-    getRolePermissions: (roleId: string) => Promise<any>;
-    assignPermission: (roleId: string, permissionId: string) => Promise<any>;
-    removePermission: (roleId: string, permissionId: string) => Promise<any>;
-    listUsers: () => Promise<any>;
-    getUser: (userId: string) => Promise<any>;
-    updateUser: (userId: string, data: Record<string, unknown>) => Promise<any>;
-    deleteUser: (userId: string) => Promise<any>;
-    getUserPermissions: (userId: string) => Promise<any>;
-    assignRole: (userId: string, roleId: string) => Promise<any>;
-    removeRole: (userId: string, roleId: string) => Promise<any>;
+    listRoles: () => Promise<ListResponse<RoleData>>;
+    listPermissions: () => Promise<ListResponse<PermissionData>>;
+    getRolePermissions: (roleId: string) => Promise<ListResponse<PermissionData>>;
+    assignPermission: (roleId: string, permissionId: string) => Promise<MessageResponse>;
+    removePermission: (roleId: string, permissionId: string) => Promise<MessageResponse>;
+    listUsers: () => Promise<ListResponse<UserData>>;
+    getUser: (userId: string) => Promise<DataResponse<UserData>>;
+    updateUser: (userId: string, data: Record<string, unknown>) => Promise<DataResponse<UserData>>;
+    deleteUser: (userId: string) => Promise<MessageResponse>;
+    getUserPermissions: (userId: string) => Promise<ListResponse<PermissionData>>;
+    assignRole: (userId: string, roleId: string) => Promise<MessageResponse>;
+    removeRole: (userId: string, roleId: string) => Promise<MessageResponse>;
   };
   tenant: {
-    list: () => Promise<any>;
-    create: (data: { name: string; slug?: string }) => Promise<any>;
-    get: (tenantId: string) => Promise<any>;
-    update: (tenantId: string, data: Record<string, unknown>) => Promise<any>;
-    delete: (tenantId: string) => Promise<any>;
-    listMembers: (tenantId: string) => Promise<any>;
-    invite: (tenantId: string, email: string) => Promise<any>;
-    acceptInvitation: (tenantId: string, token: string) => Promise<any>;
-    updateMemberRole: (tenantId: string, userId: string, roleId: string) => Promise<any>;
-    removeMember: (tenantId: string, userId: string) => Promise<any>;
+    list: () => Promise<ListResponse<TenantData>>;
+    create: (data: { name: string; slug?: string }) => Promise<DataResponse<TenantData>>;
+    get: (tenantId: string) => Promise<DataResponse<TenantData>>;
+    update: (tenantId: string, data: Record<string, unknown>) => Promise<DataResponse<TenantData>>;
+    delete: (tenantId: string) => Promise<MessageResponse>;
+    listMembers: (tenantId: string) => Promise<ListResponse<TenantMemberData>>;
+    invite: (tenantId: string, email: string) => Promise<DataResponse<{ id: string; email: string; expires_at: string; token: string }>>;
+    acceptInvitation: (tenantId: string, token: string) => Promise<MessageResponse>;
+    updateMemberRole: (tenantId: string, userId: string, roleId: string) => Promise<MessageResponse>;
+    removeMember: (tenantId: string, userId: string) => Promise<MessageResponse>;
   };
 }
 
@@ -101,16 +102,16 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       return undefined as T;
     }
 
-    let json: any;
+    let json: Record<string, unknown>;
     try { json = JSON.parse(text); } catch { throw new ApiError(res.status, "PARSE_ERROR", text); }
 
     if (!res.ok) {
-      const err = json?.error;
+      const err = json.error as Record<string, string> | undefined;
       throw new ApiError(res.status, err?.code || "UNKNOWN", err?.message || `HTTP ${res.status}`);
     }
 
     if (raw) return json as T;
-    return (json?.data ?? json) as T;
+    return (json.data ?? json) as T;
   }
 
   async function refreshToken(): Promise<string | null> {
@@ -130,17 +131,18 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
           body: JSON.stringify({ refresh_token: rt }),
         });
 
-        const json = await res.json();
-        if (!res.ok || !json?.data) {
+        const json = (await res.json()) as Record<string, unknown>;
+        const data = json.data as Record<string, string> | undefined;
+        if (!res.ok || !data) {
           config.setAccessToken(null);
           config.setRefreshToken(null);
           config.onAuthFailure?.();
           return null;
         }
 
-        config.setAccessToken(json.data.access_token);
-        config.setRefreshToken(json.data.refresh_token);
-        return json.data.access_token as string;
+        config.setAccessToken(data.access_token);
+        config.setRefreshToken(data.refresh_token);
+        return data.access_token;
       } catch (err) {
         console.warn("Token refresh failed:", err instanceof Error ? err.message : err);
         config.onAuthFailure?.();

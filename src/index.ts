@@ -10,3 +10,4 @@ export { AuthProvider, useAuth } from "./providers/auth-provider.js";
 
 // Types
 export * from "./types/generated.js";
+export * from "./types/api.js";
