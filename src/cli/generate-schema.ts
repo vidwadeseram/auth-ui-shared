@@ -64,9 +64,9 @@ function camelCase(s: string): string {
 
 function openapiToZod(name: string, schema: any): string {
   if (schema.type === "string") {
-    if (schema.format === "email") return "z.string().email()";
-    if (schema.format === "uuid") return "z.string().uuid()";
-    if (schema.format === "date-time") return "z.string().datetime()";
+    if (schema.format === "email") return "z.email()";
+    if (schema.format === "uuid") return "z.uuid()";
+    if (schema.format === "date-time") return "z.iso.datetime()";
     return "z.string()";
   }
   if (schema.type === "integer") return "z.number().int()";

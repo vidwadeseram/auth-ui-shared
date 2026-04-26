@@ -6,13 +6,13 @@ import { z } from "zod";
 export const authUserResponseSchema = z.object({ data: z.any() });
 export type AuthUserResponse = z.infer<typeof authUserResponseSchema>;
 
-export const forgotPasswordRequestSchema = z.object({ email: z.string().email() });
+export const forgotPasswordRequestSchema = z.object({ email: z.email() });
 export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
 
 export const hTTPValidationErrorSchema = z.object({ detail: z.array(z.any()).optional() });
 export type HTTPValidationError = z.infer<typeof hTTPValidationErrorSchema>;
 
-export const loginRequestSchema = z.object({ email: z.string().email(), password: z.string() });
+export const loginRequestSchema = z.object({ email: z.email(), password: z.string() });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 export const logoutRequestSchema = z.object({ refresh_token: z.string() });
@@ -24,22 +24,22 @@ export type MessageData = z.infer<typeof messageDataSchema>;
 export const messageResponseSchema = z.object({ data: z.any() });
 export type MessageResponse = z.infer<typeof messageResponseSchema>;
 
-export const permissionResponseSchema = z.object({ id: z.string().uuid(), name: z.string(), description: z.string(), created_at: z.string().datetime() });
+export const permissionResponseSchema = z.object({ id: z.uuid(), name: z.string(), description: z.string(), created_at: z.iso.datetime() });
 export type PermissionResponse = z.infer<typeof permissionResponseSchema>;
 
 export const refreshTokenRequestSchema = z.object({ refresh_token: z.string() });
 export type RefreshTokenRequest = z.infer<typeof refreshTokenRequestSchema>;
 
-export const registerRequestSchema = z.object({ email: z.string().email(), password: z.string(), first_name: z.string(), last_name: z.string() });
+export const registerRequestSchema = z.object({ email: z.email(), password: z.string(), first_name: z.string(), last_name: z.string() });
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 
 export const resetPasswordRequestSchema = z.object({ token: z.string(), new_password: z.string() });
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
 
-export const rolePermissionRequestSchema = z.object({ role_id: z.string().uuid(), permission_id: z.string().uuid() });
+export const rolePermissionRequestSchema = z.object({ role_id: z.uuid(), permission_id: z.uuid() });
 export type RolePermissionRequest = z.infer<typeof rolePermissionRequestSchema>;
 
-export const roleResponseSchema = z.object({ id: z.string().uuid(), name: z.string(), description: z.string(), created_at: z.string().datetime() });
+export const roleResponseSchema = z.object({ id: z.uuid(), name: z.string(), description: z.string(), created_at: z.iso.datetime() });
 export type RoleResponse = z.infer<typeof roleResponseSchema>;
 
 export const tokenDataSchema = z.object({ access_token: z.string(), refresh_token: z.string(), token_type: z.string().optional(), expires_in: z.number().int() });
@@ -51,16 +51,16 @@ export type TokenResponse = z.infer<typeof tokenResponseSchema>;
 export const userEnvelopeSchema = z.object({ user: z.any(), message: z.string() });
 export type UserEnvelope = z.infer<typeof userEnvelopeSchema>;
 
-export const userListResponseSchema = z.object({ id: z.string().uuid(), email: z.string(), first_name: z.string(), last_name: z.string(), is_active: z.boolean(), is_verified: z.boolean(), created_at: z.string().datetime(), updated_at: z.string().datetime() });
+export const userListResponseSchema = z.object({ id: z.uuid(), email: z.string(), first_name: z.string(), last_name: z.string(), is_active: z.boolean(), is_verified: z.boolean(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() });
 export type UserListResponse = z.infer<typeof userListResponseSchema>;
 
-export const userReadSchema = z.object({ id: z.string().uuid(), email: z.string().email(), first_name: z.string(), last_name: z.string(), is_active: z.boolean(), is_verified: z.boolean(), created_at: z.string().datetime(), updated_at: z.string().datetime() });
+export const userReadSchema = z.object({ id: z.uuid(), email: z.email(), first_name: z.string(), last_name: z.string(), is_active: z.boolean(), is_verified: z.boolean(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() });
 export type UserRead = z.infer<typeof userReadSchema>;
 
 export const userResponseSchema = z.object({ data: z.any() });
 export type UserResponse = z.infer<typeof userResponseSchema>;
 
-export const userRoleRequestSchema = z.object({ user_id: z.string().uuid(), role_id: z.string().uuid() });
+export const userRoleRequestSchema = z.object({ user_id: z.uuid(), role_id: z.uuid() });
 export type UserRoleRequest = z.infer<typeof userRoleRequestSchema>;
 
 export const userUpdateRequestSchema = z.object({ first_name: z.any().optional(), last_name: z.any().optional(), is_active: z.any().optional() });

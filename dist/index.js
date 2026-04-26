@@ -12,8 +12,7 @@ var ApiError = class extends Error {
 
 // src/client/api-client.ts
 function createApiClient(config) {
-  let isRefreshing = false;
-  let refreshPromise = null;
+  let refreshInFlight = null;
   async function request(method, path, body, opts) {
     const url = `${config.baseUrl}${path}`;
     const headers = {
@@ -37,12 +36,12 @@ function createApiClient(config) {
           headers,
           body: body ? JSON.stringify(body) : void 0
         });
-        return handleResponse(retryRes);
+        return handleResponse(retryRes, opts?.rawResponse);
       }
     }
-    return handleResponse(res);
+    return handleResponse(res, opts?.rawResponse);
   }
-  async function handleResponse(res) {
+  async function handleResponse(res, raw) {
     const text = await res.text();
     if (!text) {
       if (!res.ok) throw new ApiError(res.status, "UNKNOWN", `HTTP ${res.status}`);
@@ -58,47 +57,41 @@ function createApiClient(config) {
       const err = json?.error;
       throw new ApiError(res.status, err?.code || "UNKNOWN", err?.message || `HTTP ${res.status}`);
     }
+    if (raw) return json;
     return json?.data ?? json;
   }
   async function refreshToken() {
-    if (isRefreshing && refreshPromise) {
-      return new Promise((resolve, reject) => {
-        refreshPromise.resolve = resolve;
-        refreshPromise.reject = reject;
-      });
-    }
+    if (refreshInFlight) return refreshInFlight;
     const rt = config.getRefreshToken();
     if (!rt) {
       config.onAuthFailure?.();
       return null;
     }
-    isRefreshing = true;
-    refreshPromise = { resolve: () => {
-    }, reject: () => {
-    } };
-    try {
-      const res = await fetch(`${config.baseUrl}/api/v1/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: rt })
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.data) {
-        config.setAccessToken(null);
-        config.setRefreshToken(null);
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${config.baseUrl}/api/v1/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt })
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.data) {
+          config.setAccessToken(null);
+          config.setRefreshToken(null);
+          config.onAuthFailure?.();
+          return null;
+        }
+        config.setAccessToken(json.data.access_token);
+        config.setRefreshToken(json.data.refresh_token);
+        return json.data.access_token;
+      } catch {
         config.onAuthFailure?.();
         return null;
+      } finally {
+        refreshInFlight = null;
       }
-      config.setAccessToken(json.data.access_token);
-      config.setRefreshToken(json.data.refresh_token);
-      return json.data.access_token;
-    } catch {
-      config.onAuthFailure?.();
-      return null;
-    } finally {
-      isRefreshing = false;
-      refreshPromise = null;
-    }
+    })();
+    return refreshInFlight;
   }
   const auth = {
     register: (data) => request("POST", "/api/v1/auth/register", data, { skipAuth: true }),
@@ -136,7 +129,15 @@ function createApiClient(config) {
     updateMemberRole: (id, uid, rid) => request("PATCH", `/api/v1/tenants/${id}/members/${uid}/role`, { role_id: rid }),
     removeMember: (id, uid) => request("DELETE", `/api/v1/tenants/${id}/members/${uid}`)
   };
-  return { auth, admin, tenant };
+  return {
+    get: (path) => request("GET", path, void 0, { rawResponse: true }),
+    post: (path, body) => request("POST", path, body, { rawResponse: true }),
+    patch: (path, body) => request("PATCH", path, body, { rawResponse: true }),
+    delete: (path, body) => request("DELETE", path, body, { rawResponse: true }),
+    auth,
+    admin,
+    tenant
+  };
 }
 
 // src/providers/auth-provider.tsx
@@ -243,10 +244,59 @@ function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
+
+// src/types/generated.ts
+import { z } from "zod";
+var authUserResponseSchema = z.object({ data: z.any() });
+var forgotPasswordRequestSchema = z.object({ email: z.email() });
+var hTTPValidationErrorSchema = z.object({ detail: z.array(z.any()).optional() });
+var loginRequestSchema = z.object({ email: z.email(), password: z.string() });
+var logoutRequestSchema = z.object({ refresh_token: z.string() });
+var messageDataSchema = z.object({ message: z.string() });
+var messageResponseSchema = z.object({ data: z.any() });
+var permissionResponseSchema = z.object({ id: z.uuid(), name: z.string(), description: z.string(), created_at: z.iso.datetime() });
+var refreshTokenRequestSchema = z.object({ refresh_token: z.string() });
+var registerRequestSchema = z.object({ email: z.email(), password: z.string(), first_name: z.string(), last_name: z.string() });
+var resetPasswordRequestSchema = z.object({ token: z.string(), new_password: z.string() });
+var rolePermissionRequestSchema = z.object({ role_id: z.uuid(), permission_id: z.uuid() });
+var roleResponseSchema = z.object({ id: z.uuid(), name: z.string(), description: z.string(), created_at: z.iso.datetime() });
+var tokenDataSchema = z.object({ access_token: z.string(), refresh_token: z.string(), token_type: z.string().optional(), expires_in: z.number().int() });
+var tokenResponseSchema = z.object({ data: z.any() });
+var userEnvelopeSchema = z.object({ user: z.any(), message: z.string() });
+var userListResponseSchema = z.object({ id: z.uuid(), email: z.string(), first_name: z.string(), last_name: z.string(), is_active: z.boolean(), is_verified: z.boolean(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() });
+var userReadSchema = z.object({ id: z.uuid(), email: z.email(), first_name: z.string(), last_name: z.string(), is_active: z.boolean(), is_verified: z.boolean(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() });
+var userResponseSchema = z.object({ data: z.any() });
+var userRoleRequestSchema = z.object({ user_id: z.uuid(), role_id: z.uuid() });
+var userUpdateRequestSchema = z.object({ first_name: z.any().optional(), last_name: z.any().optional(), is_active: z.any().optional() });
+var validationErrorSchema = z.object({ loc: z.array(z.any()), msg: z.string(), type: z.string(), input: z.any().optional(), ctx: z.object({}).optional() });
+var verifyEmailRequestSchema = z.object({ token: z.string() });
 export {
   ApiError,
   AuthProvider,
+  authUserResponseSchema,
   createApiClient,
-  useAuth
+  forgotPasswordRequestSchema,
+  hTTPValidationErrorSchema,
+  loginRequestSchema,
+  logoutRequestSchema,
+  messageDataSchema,
+  messageResponseSchema,
+  permissionResponseSchema,
+  refreshTokenRequestSchema,
+  registerRequestSchema,
+  resetPasswordRequestSchema,
+  rolePermissionRequestSchema,
+  roleResponseSchema,
+  tokenDataSchema,
+  tokenResponseSchema,
+  useAuth,
+  userEnvelopeSchema,
+  userListResponseSchema,
+  userReadSchema,
+  userResponseSchema,
+  userRoleRequestSchema,
+  userUpdateRequestSchema,
+  validationErrorSchema,
+  verifyEmailRequestSchema
 };
 //# sourceMappingURL=index.js.map

@@ -21,8 +21,31 @@ var index_exports = {};
 __export(index_exports, {
   ApiError: () => ApiError,
   AuthProvider: () => AuthProvider,
+  authUserResponseSchema: () => authUserResponseSchema,
   createApiClient: () => createApiClient,
-  useAuth: () => useAuth
+  forgotPasswordRequestSchema: () => forgotPasswordRequestSchema,
+  hTTPValidationErrorSchema: () => hTTPValidationErrorSchema,
+  loginRequestSchema: () => loginRequestSchema,
+  logoutRequestSchema: () => logoutRequestSchema,
+  messageDataSchema: () => messageDataSchema,
+  messageResponseSchema: () => messageResponseSchema,
+  permissionResponseSchema: () => permissionResponseSchema,
+  refreshTokenRequestSchema: () => refreshTokenRequestSchema,
+  registerRequestSchema: () => registerRequestSchema,
+  resetPasswordRequestSchema: () => resetPasswordRequestSchema,
+  rolePermissionRequestSchema: () => rolePermissionRequestSchema,
+  roleResponseSchema: () => roleResponseSchema,
+  tokenDataSchema: () => tokenDataSchema,
+  tokenResponseSchema: () => tokenResponseSchema,
+  useAuth: () => useAuth,
+  userEnvelopeSchema: () => userEnvelopeSchema,
+  userListResponseSchema: () => userListResponseSchema,
+  userReadSchema: () => userReadSchema,
+  userResponseSchema: () => userResponseSchema,
+  userRoleRequestSchema: () => userRoleRequestSchema,
+  userUpdateRequestSchema: () => userUpdateRequestSchema,
+  validationErrorSchema: () => validationErrorSchema,
+  verifyEmailRequestSchema: () => verifyEmailRequestSchema
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -40,8 +63,7 @@ var ApiError = class extends Error {
 
 // src/client/api-client.ts
 function createApiClient(config) {
-  let isRefreshing = false;
-  let refreshPromise = null;
+  let refreshInFlight = null;
   async function request(method, path, body, opts) {
     const url = `${config.baseUrl}${path}`;
     const headers = {
@@ -65,12 +87,12 @@ function createApiClient(config) {
           headers,
           body: body ? JSON.stringify(body) : void 0
         });
-        return handleResponse(retryRes);
+        return handleResponse(retryRes, opts?.rawResponse);
       }
     }
-    return handleResponse(res);
+    return handleResponse(res, opts?.rawResponse);
   }
-  async function handleResponse(res) {
+  async function handleResponse(res, raw) {
     const text = await res.text();
     if (!text) {
       if (!res.ok) throw new ApiError(res.status, "UNKNOWN", `HTTP ${res.status}`);
@@ -86,47 +108,41 @@ function createApiClient(config) {
       const err = json?.error;
       throw new ApiError(res.status, err?.code || "UNKNOWN", err?.message || `HTTP ${res.status}`);
     }
+    if (raw) return json;
     return json?.data ?? json;
   }
   async function refreshToken() {
-    if (isRefreshing && refreshPromise) {
-      return new Promise((resolve, reject) => {
-        refreshPromise.resolve = resolve;
-        refreshPromise.reject = reject;
-      });
-    }
+    if (refreshInFlight) return refreshInFlight;
     const rt = config.getRefreshToken();
     if (!rt) {
       config.onAuthFailure?.();
       return null;
     }
-    isRefreshing = true;
-    refreshPromise = { resolve: () => {
-    }, reject: () => {
-    } };
-    try {
-      const res = await fetch(`${config.baseUrl}/api/v1/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: rt })
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.data) {
-        config.setAccessToken(null);
-        config.setRefreshToken(null);
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${config.baseUrl}/api/v1/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt })
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.data) {
+          config.setAccessToken(null);
+          config.setRefreshToken(null);
+          config.onAuthFailure?.();
+          return null;
+        }
+        config.setAccessToken(json.data.access_token);
+        config.setRefreshToken(json.data.refresh_token);
+        return json.data.access_token;
+      } catch {
         config.onAuthFailure?.();
         return null;
+      } finally {
+        refreshInFlight = null;
       }
-      config.setAccessToken(json.data.access_token);
-      config.setRefreshToken(json.data.refresh_token);
-      return json.data.access_token;
-    } catch {
-      config.onAuthFailure?.();
-      return null;
-    } finally {
-      isRefreshing = false;
-      refreshPromise = null;
-    }
+    })();
+    return refreshInFlight;
   }
   const auth = {
     register: (data) => request("POST", "/api/v1/auth/register", data, { skipAuth: true }),
@@ -164,7 +180,15 @@ function createApiClient(config) {
     updateMemberRole: (id, uid, rid) => request("PATCH", `/api/v1/tenants/${id}/members/${uid}/role`, { role_id: rid }),
     removeMember: (id, uid) => request("DELETE", `/api/v1/tenants/${id}/members/${uid}`)
   };
-  return { auth, admin, tenant };
+  return {
+    get: (path) => request("GET", path, void 0, { rawResponse: true }),
+    post: (path, body) => request("POST", path, body, { rawResponse: true }),
+    patch: (path, body) => request("PATCH", path, body, { rawResponse: true }),
+    delete: (path, body) => request("DELETE", path, body, { rawResponse: true }),
+    auth,
+    admin,
+    tenant
+  };
 }
 
 // src/providers/auth-provider.tsx
@@ -271,11 +295,60 @@ function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
+
+// src/types/generated.ts
+var import_zod = require("zod");
+var authUserResponseSchema = import_zod.z.object({ data: import_zod.z.any() });
+var forgotPasswordRequestSchema = import_zod.z.object({ email: import_zod.z.email() });
+var hTTPValidationErrorSchema = import_zod.z.object({ detail: import_zod.z.array(import_zod.z.any()).optional() });
+var loginRequestSchema = import_zod.z.object({ email: import_zod.z.email(), password: import_zod.z.string() });
+var logoutRequestSchema = import_zod.z.object({ refresh_token: import_zod.z.string() });
+var messageDataSchema = import_zod.z.object({ message: import_zod.z.string() });
+var messageResponseSchema = import_zod.z.object({ data: import_zod.z.any() });
+var permissionResponseSchema = import_zod.z.object({ id: import_zod.z.uuid(), name: import_zod.z.string(), description: import_zod.z.string(), created_at: import_zod.z.iso.datetime() });
+var refreshTokenRequestSchema = import_zod.z.object({ refresh_token: import_zod.z.string() });
+var registerRequestSchema = import_zod.z.object({ email: import_zod.z.email(), password: import_zod.z.string(), first_name: import_zod.z.string(), last_name: import_zod.z.string() });
+var resetPasswordRequestSchema = import_zod.z.object({ token: import_zod.z.string(), new_password: import_zod.z.string() });
+var rolePermissionRequestSchema = import_zod.z.object({ role_id: import_zod.z.uuid(), permission_id: import_zod.z.uuid() });
+var roleResponseSchema = import_zod.z.object({ id: import_zod.z.uuid(), name: import_zod.z.string(), description: import_zod.z.string(), created_at: import_zod.z.iso.datetime() });
+var tokenDataSchema = import_zod.z.object({ access_token: import_zod.z.string(), refresh_token: import_zod.z.string(), token_type: import_zod.z.string().optional(), expires_in: import_zod.z.number().int() });
+var tokenResponseSchema = import_zod.z.object({ data: import_zod.z.any() });
+var userEnvelopeSchema = import_zod.z.object({ user: import_zod.z.any(), message: import_zod.z.string() });
+var userListResponseSchema = import_zod.z.object({ id: import_zod.z.uuid(), email: import_zod.z.string(), first_name: import_zod.z.string(), last_name: import_zod.z.string(), is_active: import_zod.z.boolean(), is_verified: import_zod.z.boolean(), created_at: import_zod.z.iso.datetime(), updated_at: import_zod.z.iso.datetime() });
+var userReadSchema = import_zod.z.object({ id: import_zod.z.uuid(), email: import_zod.z.email(), first_name: import_zod.z.string(), last_name: import_zod.z.string(), is_active: import_zod.z.boolean(), is_verified: import_zod.z.boolean(), created_at: import_zod.z.iso.datetime(), updated_at: import_zod.z.iso.datetime() });
+var userResponseSchema = import_zod.z.object({ data: import_zod.z.any() });
+var userRoleRequestSchema = import_zod.z.object({ user_id: import_zod.z.uuid(), role_id: import_zod.z.uuid() });
+var userUpdateRequestSchema = import_zod.z.object({ first_name: import_zod.z.any().optional(), last_name: import_zod.z.any().optional(), is_active: import_zod.z.any().optional() });
+var validationErrorSchema = import_zod.z.object({ loc: import_zod.z.array(import_zod.z.any()), msg: import_zod.z.string(), type: import_zod.z.string(), input: import_zod.z.any().optional(), ctx: import_zod.z.object({}).optional() });
+var verifyEmailRequestSchema = import_zod.z.object({ token: import_zod.z.string() });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ApiError,
   AuthProvider,
+  authUserResponseSchema,
   createApiClient,
-  useAuth
+  forgotPasswordRequestSchema,
+  hTTPValidationErrorSchema,
+  loginRequestSchema,
+  logoutRequestSchema,
+  messageDataSchema,
+  messageResponseSchema,
+  permissionResponseSchema,
+  refreshTokenRequestSchema,
+  registerRequestSchema,
+  resetPasswordRequestSchema,
+  rolePermissionRequestSchema,
+  roleResponseSchema,
+  tokenDataSchema,
+  tokenResponseSchema,
+  useAuth,
+  userEnvelopeSchema,
+  userListResponseSchema,
+  userReadSchema,
+  userResponseSchema,
+  userRoleRequestSchema,
+  userUpdateRequestSchema,
+  validationErrorSchema,
+  verifyEmailRequestSchema
 });
 //# sourceMappingURL=index.cjs.map

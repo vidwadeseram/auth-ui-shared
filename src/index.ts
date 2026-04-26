@@ -9,4 +9,4 @@ export { ApiError } from "./client/errors.js";
 export { AuthProvider, useAuth } from "./providers/auth-provider.js";
 
 // Types
-export type {} from "./types/generated.js";
+export * from "./types/generated.js";

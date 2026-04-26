@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { ApiError } from "./errors.js";
 
 export interface ApiClientConfig {
@@ -10,12 +9,12 @@ export interface ApiClientConfig {
   onAuthFailure?: () => void;
 }
 
-interface RefreshPromise {
-  resolve: (token: string) => void;
-  reject: (error: unknown) => void;
-}
-
 export interface ApiClient {
+  // Generic HTTP escape hatches — return RAW JSON body (not unwrapped to .data)
+  get<T = any>(path: string): Promise<T>;
+  post<T = any>(path: string, body?: unknown): Promise<T>;
+  patch<T = any>(path: string, body?: unknown): Promise<T>;
+  delete<T = any>(path: string, body?: unknown): Promise<T>;
   auth: {
     register: (data: { email: string; password: string; first_name: string; last_name: string }) => Promise<any>;
     login: (data: { email: string; password: string }) => Promise<any>;
@@ -55,8 +54,7 @@ export interface ApiClient {
 }
 
 export function createApiClient(config: ApiClientConfig): ApiClient {
-  let isRefreshing = false;
-  let refreshPromise: RefreshPromise | null = null;
+  let refreshInFlight: Promise<string | null> | null = null;
 
   async function request<T>(
     method: string,
@@ -89,14 +87,14 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
           headers,
           body: body ? JSON.stringify(body) : undefined,
         });
-        return handleResponse<T>(retryRes);
+        return handleResponse<T>(retryRes, opts?.rawResponse);
       }
     }
 
-    return handleResponse<T>(res);
+    return handleResponse<T>(res, opts?.rawResponse);
   }
 
-  async function handleResponse<T>(res: Response): Promise<T> {
+  async function handleResponse<T>(res: Response, raw?: boolean): Promise<T> {
     const text = await res.text();
     if (!text) {
       if (!res.ok) throw new ApiError(res.status, "UNKNOWN", `HTTP ${res.status}`);
@@ -111,16 +109,12 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       throw new ApiError(res.status, err?.code || "UNKNOWN", err?.message || `HTTP ${res.status}`);
     }
 
+    if (raw) return json as T;
     return (json?.data ?? json) as T;
   }
 
   async function refreshToken(): Promise<string | null> {
-    if (isRefreshing && refreshPromise) {
-      return new Promise<string>((resolve, reject) => {
-        refreshPromise!.resolve = resolve;
-        refreshPromise!.reject = reject;
-      });
-    }
+    if (refreshInFlight) return refreshInFlight;
 
     const rt = config.getRefreshToken();
     if (!rt) {
@@ -128,37 +122,37 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       return null;
     }
 
-    isRefreshing = true;
-    refreshPromise = { resolve: () => {}, reject: () => {} };
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${config.baseUrl}/api/v1/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
 
-    try {
-      const res = await fetch(`${config.baseUrl}/api/v1/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: rt }),
-      });
+        const json = await res.json();
+        if (!res.ok || !json?.data) {
+          config.setAccessToken(null);
+          config.setRefreshToken(null);
+          config.onAuthFailure?.();
+          return null;
+        }
 
-      const json = await res.json();
-      if (!res.ok || !json?.data) {
-        config.setAccessToken(null);
-        config.setRefreshToken(null);
+        config.setAccessToken(json.data.access_token);
+        config.setRefreshToken(json.data.refresh_token);
+        return json.data.access_token as string;
+      } catch {
         config.onAuthFailure?.();
         return null;
+      } finally {
+        refreshInFlight = null;
       }
+    })();
 
-      config.setAccessToken(json.data.access_token);
-      config.setRefreshToken(json.data.refresh_token);
-      return json.data.access_token;
-    } catch {
-      config.onAuthFailure?.();
-      return null;
-    } finally {
-      isRefreshing = false;
-      refreshPromise = null;
-    }
+    return refreshInFlight;
   }
 
-  const auth = {
+  const auth: ApiClient["auth"] = {
     register: (data) => request("POST", "/api/v1/auth/register", data, { skipAuth: true }),
     login: (data) => request("POST", "/api/v1/auth/login", data, { skipAuth: true }),
     logout: (rt) => request("POST", "/api/v1/auth/logout", { refresh_token: rt }),
@@ -169,7 +163,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     resetPassword: (token, newPassword) => request("POST", "/api/v1/auth/reset-password", { token, new_password: newPassword }, { skipAuth: true }),
   };
 
-  const admin = {
+  const admin: ApiClient["admin"] = {
     listRoles: () => request("GET", "/api/v1/admin/roles"),
     listPermissions: () => request("GET", "/api/v1/admin/permissions"),
     getRolePermissions: (id) => request("GET", `/api/v1/admin/roles/${id}/permissions`),
@@ -184,7 +178,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     removeRole: (userId, roleId) => request("DELETE", "/api/v1/admin/users/roles", { user_id: userId, role_id: roleId }),
   };
 
-  const tenant = {
+  const tenant: ApiClient["tenant"] = {
     list: () => request("GET", "/api/v1/tenants"),
     create: (data) => request("POST", "/api/v1/tenants", data),
     get: (id) => request("GET", `/api/v1/tenants/${id}`),
@@ -192,10 +186,18 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     delete: (id) => request("DELETE", `/api/v1/tenants/${id}`),
     listMembers: (id) => request("GET", `/api/v1/tenants/${id}/members`),
     invite: (id, email) => request("POST", `/api/v1/tenants/${id}/invitations`, { email }),
-    acceptInvitation: (id: string, token: string) => request("POST", `/api/v1/tenants/${id}/invitations/accept`, { token }),
-    updateMemberRole: (id: string, uid: string, rid: string) => request("PATCH", `/api/v1/tenants/${id}/members/${uid}/role`, { role_id: rid }),
-    removeMember: (id: string, uid: string) => request("DELETE", `/api/v1/tenants/${id}/members/${uid}`),
+    acceptInvitation: (id, token) => request("POST", `/api/v1/tenants/${id}/invitations/accept`, { token }),
+    updateMemberRole: (id, uid, rid) => request("PATCH", `/api/v1/tenants/${id}/members/${uid}/role`, { role_id: rid }),
+    removeMember: (id, uid) => request("DELETE", `/api/v1/tenants/${id}/members/${uid}`),
   };
 
-  return { auth, admin, tenant };
+  return {
+    get: <T = any>(path: string) => request<T>("GET", path, undefined, { rawResponse: true }),
+    post: <T = any>(path: string, body?: unknown) => request<T>("POST", path, body, { rawResponse: true }),
+    patch: <T = any>(path: string, body?: unknown) => request<T>("PATCH", path, body, { rawResponse: true }),
+    delete: <T = any>(path: string, body?: unknown) => request<T>("DELETE", path, body, { rawResponse: true }),
+    auth,
+    admin,
+    tenant,
+  };
 }
