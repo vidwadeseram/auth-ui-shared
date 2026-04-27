@@ -1,119 +1,55 @@
+import { z } from 'zod';
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import React from 'react';
-import { z } from 'zod';
 
-interface ApiClientConfig {
-    baseUrl: string;
-    getAccessToken: () => string | null;
-    setAccessToken: (token: string | null) => void;
-    getRefreshToken: () => string | null;
-    setRefreshToken: (token: string | null) => void;
-    onAuthFailure?: () => void;
-}
-interface ApiClient {
-    get<T = any>(path: string): Promise<T>;
-    post<T = any>(path: string, body?: unknown): Promise<T>;
-    patch<T = any>(path: string, body?: unknown): Promise<T>;
-    delete<T = any>(path: string, body?: unknown): Promise<T>;
-    auth: {
-        register: (data: {
-            email: string;
-            password: string;
-            first_name: string;
-            last_name: string;
-        }) => Promise<any>;
-        login: (data: {
-            email: string;
-            password: string;
-        }) => Promise<any>;
-        logout: (refreshToken: string) => Promise<any>;
-        refresh: (refreshToken: string) => Promise<any>;
-        me: () => Promise<any>;
-        verifyEmail: (token: string) => Promise<any>;
-        forgotPassword: (email: string) => Promise<any>;
-        resetPassword: (token: string, newPassword: string) => Promise<any>;
-    };
-    admin: {
-        listRoles: () => Promise<any>;
-        listPermissions: () => Promise<any>;
-        getRolePermissions: (roleId: string) => Promise<any>;
-        assignPermission: (roleId: string, permissionId: string) => Promise<any>;
-        removePermission: (roleId: string, permissionId: string) => Promise<any>;
-        listUsers: () => Promise<any>;
-        getUser: (userId: string) => Promise<any>;
-        updateUser: (userId: string, data: Record<string, unknown>) => Promise<any>;
-        deleteUser: (userId: string) => Promise<any>;
-        getUserPermissions: (userId: string) => Promise<any>;
-        assignRole: (userId: string, roleId: string) => Promise<any>;
-        removeRole: (userId: string, roleId: string) => Promise<any>;
-    };
-    tenant: {
-        list: () => Promise<any>;
-        create: (data: {
-            name: string;
-            slug?: string;
-        }) => Promise<any>;
-        get: (tenantId: string) => Promise<any>;
-        update: (tenantId: string, data: Record<string, unknown>) => Promise<any>;
-        delete: (tenantId: string) => Promise<any>;
-        listMembers: (tenantId: string) => Promise<any>;
-        invite: (tenantId: string, email: string) => Promise<any>;
-        acceptInvitation: (tenantId: string, token: string) => Promise<any>;
-        updateMemberRole: (tenantId: string, userId: string, roleId: string) => Promise<any>;
-        removeMember: (tenantId: string, userId: string) => Promise<any>;
-    };
-}
-declare function createApiClient(config: ApiClientConfig): ApiClient;
-
-declare class ApiError extends Error {
-    status: number;
-    code: string;
-    constructor(status: number, code: string, message: string);
-}
-
-interface AuthUser {
+interface UserData {
     id: string;
     email: string;
     first_name: string;
     last_name: string;
     is_active: boolean;
-    is_verified: boolean;
     email_verified: boolean;
     role: string;
     created_at: string;
+    updated_at?: string;
 }
-interface AuthContextType {
-    user: AuthUser | null;
-    loading: boolean;
-    isLoading: boolean;
-    isAuthenticated: boolean;
-    api: ApiClient;
-    apiClient: ApiClient;
-    login: (email: string, password: string) => Promise<void>;
-    register: (data: {
-        email: string;
-        password: string;
-        first_name: string;
-        last_name: string;
-    }) => Promise<void>;
-    logout: () => Promise<void>;
-    verifyEmail: (token: string) => Promise<void>;
-    forgotPassword: (email: string) => Promise<void>;
-    resetPassword: (token: string, newPassword: string) => Promise<void>;
+interface RoleData {
+    id: string;
+    name: string;
+    description?: string;
+    created_at: string;
 }
-interface AuthProviderProps {
-    baseUrl: string;
-    children: React.ReactNode;
-    onAuthFailure?: () => void;
-    tokenStorage?: {
-        getAccessToken: () => string | null;
-        setAccessToken: (token: string | null) => void;
-        getRefreshToken: () => string | null;
-        setRefreshToken: (token: string | null) => void;
-    };
+interface PermissionData {
+    id: string;
+    name: string;
+    description?: string;
+    created_at: string;
 }
-declare function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }: AuthProviderProps): react_jsx_runtime.JSX.Element;
-declare function useAuth(): AuthContextType;
+interface TenantData {
+    id: string;
+    name: string;
+    slug: string;
+    owner_id: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+interface TenantMemberData {
+    id: string;
+    tenant_id: string;
+    user_id: string;
+    role_id: string;
+    is_active: boolean;
+    joined_at: string;
+    user_email?: string;
+    role_name?: string;
+}
+interface DataResponse<T> {
+    data: T;
+}
+interface ListResponse<T> {
+    data: T[];
+}
 
 declare const authUserResponseSchema: z.ZodObject<{
     data: z.ZodAny;
@@ -245,4 +181,125 @@ declare const verifyEmailRequestSchema: z.ZodObject<{
 }, z.core.$strip>;
 type VerifyEmailRequest = z.infer<typeof verifyEmailRequestSchema>;
 
-export { type ApiClient, type ApiClientConfig, ApiError, AuthProvider, type AuthUserResponse, type ForgotPasswordRequest, type HTTPValidationError, type LoginRequest, type LogoutRequest, type MessageData, type MessageResponse, type PermissionResponse, type RefreshTokenRequest, type RegisterRequest, type ResetPasswordRequest, type RolePermissionRequest, type RoleResponse, type TokenData, type TokenResponse, type UserEnvelope, type UserListResponse, type UserRead, type UserResponse, type UserRoleRequest, type UserUpdateRequest, type ValidationError, type VerifyEmailRequest, authUserResponseSchema, createApiClient, forgotPasswordRequestSchema, hTTPValidationErrorSchema, loginRequestSchema, logoutRequestSchema, messageDataSchema, messageResponseSchema, permissionResponseSchema, refreshTokenRequestSchema, registerRequestSchema, resetPasswordRequestSchema, rolePermissionRequestSchema, roleResponseSchema, tokenDataSchema, tokenResponseSchema, useAuth, userEnvelopeSchema, userListResponseSchema, userReadSchema, userResponseSchema, userRoleRequestSchema, userUpdateRequestSchema, validationErrorSchema, verifyEmailRequestSchema };
+interface ApiClientConfig {
+    baseUrl: string;
+    getAccessToken: () => string | null;
+    setAccessToken: (token: string | null) => void;
+    getRefreshToken: () => string | null;
+    setRefreshToken: (token: string | null) => void;
+    onAuthFailure?: () => void;
+}
+interface ApiClient {
+    get<T = unknown>(path: string): Promise<T>;
+    post<T = unknown>(path: string, body?: unknown): Promise<T>;
+    patch<T = unknown>(path: string, body?: unknown): Promise<T>;
+    delete<T = unknown>(path: string, body?: unknown): Promise<T>;
+    auth: {
+        register: (data: {
+            email: string;
+            password: string;
+            first_name: string;
+            last_name: string;
+        }) => Promise<DataResponse<{
+            user: UserData;
+            message: string;
+        }>>;
+        login: (data: {
+            email: string;
+            password: string;
+        }) => Promise<DataResponse<TokenData>>;
+        logout: (refreshToken: string) => Promise<MessageResponse>;
+        refresh: (refreshToken: string) => Promise<DataResponse<TokenData>>;
+        me: () => Promise<DataResponse<UserData>>;
+        verifyEmail: (token: string) => Promise<MessageResponse>;
+        forgotPassword: (email: string) => Promise<MessageResponse>;
+        resetPassword: (token: string, newPassword: string) => Promise<MessageResponse>;
+    };
+    admin: {
+        listRoles: () => Promise<ListResponse<RoleData>>;
+        listPermissions: () => Promise<ListResponse<PermissionData>>;
+        getRolePermissions: (roleId: string) => Promise<ListResponse<PermissionData>>;
+        assignPermission: (roleId: string, permissionId: string) => Promise<MessageResponse>;
+        removePermission: (roleId: string, permissionId: string) => Promise<MessageResponse>;
+        listUsers: () => Promise<ListResponse<UserData>>;
+        getUser: (userId: string) => Promise<DataResponse<UserData>>;
+        updateUser: (userId: string, data: Record<string, unknown>) => Promise<DataResponse<UserData>>;
+        deleteUser: (userId: string) => Promise<MessageResponse>;
+        getUserPermissions: (userId: string) => Promise<ListResponse<PermissionData>>;
+        assignRole: (userId: string, roleId: string) => Promise<MessageResponse>;
+        removeRole: (userId: string, roleId: string) => Promise<MessageResponse>;
+    };
+    tenant: {
+        list: () => Promise<ListResponse<TenantData>>;
+        create: (data: {
+            name: string;
+            slug?: string;
+        }) => Promise<DataResponse<TenantData>>;
+        get: (tenantId: string) => Promise<DataResponse<TenantData>>;
+        update: (tenantId: string, data: Record<string, unknown>) => Promise<DataResponse<TenantData>>;
+        delete: (tenantId: string) => Promise<MessageResponse>;
+        listMembers: (tenantId: string) => Promise<ListResponse<TenantMemberData>>;
+        invite: (tenantId: string, email: string) => Promise<DataResponse<{
+            id: string;
+            email: string;
+            expires_at: string;
+            token: string;
+        }>>;
+        acceptInvitation: (tenantId: string, token: string) => Promise<MessageResponse>;
+        updateMemberRole: (tenantId: string, userId: string, roleId: string) => Promise<MessageResponse>;
+        removeMember: (tenantId: string, userId: string) => Promise<MessageResponse>;
+    };
+}
+declare function createApiClient(config: ApiClientConfig): ApiClient;
+
+declare class ApiError extends Error {
+    status: number;
+    code: string;
+    constructor(status: number, code: string, message: string);
+}
+
+interface AuthUser {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    is_active: boolean;
+    is_verified: boolean;
+    email_verified: boolean;
+    role: string;
+    created_at: string;
+}
+interface AuthContextType {
+    user: AuthUser | null;
+    loading: boolean;
+    isLoading: boolean;
+    isAuthenticated: boolean;
+    api: ApiClient;
+    apiClient: ApiClient;
+    login: (email: string, password: string) => Promise<void>;
+    register: (data: {
+        email: string;
+        password: string;
+        first_name: string;
+        last_name: string;
+    }) => Promise<void>;
+    logout: () => Promise<void>;
+    verifyEmail: (token: string) => Promise<void>;
+    forgotPassword: (email: string) => Promise<void>;
+    resetPassword: (token: string, newPassword: string) => Promise<void>;
+}
+interface AuthProviderProps {
+    baseUrl: string;
+    children: React.ReactNode;
+    onAuthFailure?: () => void;
+    tokenStorage?: {
+        getAccessToken: () => string | null;
+        setAccessToken: (token: string | null) => void;
+        getRefreshToken: () => string | null;
+        setRefreshToken: (token: string | null) => void;
+    };
+}
+declare function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }: AuthProviderProps): react_jsx_runtime.JSX.Element;
+declare function useAuth(): AuthContextType;
+
+export { type ApiClient, type ApiClientConfig, ApiError, AuthProvider, type AuthUserResponse, type DataResponse, type ForgotPasswordRequest, type HTTPValidationError, type ListResponse, type LoginRequest, type LogoutRequest, type MessageData, type MessageResponse, type PermissionData, type PermissionResponse, type RefreshTokenRequest, type RegisterRequest, type ResetPasswordRequest, type RoleData, type RolePermissionRequest, type RoleResponse, type TenantData, type TenantMemberData, type TokenData, type TokenResponse, type UserData, type UserEnvelope, type UserListResponse, type UserRead, type UserResponse, type UserRoleRequest, type UserUpdateRequest, type ValidationError, type VerifyEmailRequest, authUserResponseSchema, createApiClient, forgotPasswordRequestSchema, hTTPValidationErrorSchema, loginRequestSchema, logoutRequestSchema, messageDataSchema, messageResponseSchema, permissionResponseSchema, refreshTokenRequestSchema, registerRequestSchema, resetPasswordRequestSchema, rolePermissionRequestSchema, roleResponseSchema, tokenDataSchema, tokenResponseSchema, useAuth, userEnvelopeSchema, userListResponseSchema, userReadSchema, userResponseSchema, userRoleRequestSchema, userUpdateRequestSchema, validationErrorSchema, verifyEmailRequestSchema };

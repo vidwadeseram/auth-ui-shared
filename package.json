@@ -21,7 +21,8 @@
     "dev": "tsup --watch",
     "generate:schema": "node dist/cli/generate-schema.js",
     "typecheck": "tsc --noEmit",
-    "prepare": "tsup"
+    "prepare": "tsup",
+    "test": "vitest run"
   },
   "dependencies": {
     "commander": "^14.0.0",
@@ -31,9 +32,11 @@
   "devDependencies": {
     "@types/node": "^25.0.0",
     "@types/react": "^19.2.0",
+    "jsdom": "^26.0.0",
     "react": "^19.2.0",
     "tsup": "^8.4.0",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "vitest": "^3.0.0"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.100.5",

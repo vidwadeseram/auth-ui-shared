@@ -54,11 +54,11 @@ function createApiClient(config) {
       throw new ApiError(res.status, "PARSE_ERROR", text);
     }
     if (!res.ok) {
-      const err = json?.error;
+      const err = json.error;
       throw new ApiError(res.status, err?.code || "UNKNOWN", err?.message || `HTTP ${res.status}`);
     }
     if (raw) return json;
-    return json?.data ?? json;
+    return json.data ?? json;
   }
   async function refreshToken() {
     if (refreshInFlight) return refreshInFlight;
@@ -75,16 +75,18 @@ function createApiClient(config) {
           body: JSON.stringify({ refresh_token: rt })
         });
         const json = await res.json();
-        if (!res.ok || !json?.data) {
+        const data = json.data;
+        if (!res.ok || !data) {
           config.setAccessToken(null);
           config.setRefreshToken(null);
           config.onAuthFailure?.();
           return null;
         }
-        config.setAccessToken(json.data.access_token);
-        config.setRefreshToken(json.data.refresh_token);
-        return json.data.access_token;
-      } catch {
+        config.setAccessToken(data.access_token);
+        config.setRefreshToken(data.refresh_token);
+        return data.access_token;
+      } catch (err) {
+        console.warn("Token refresh failed:", err instanceof Error ? err.message : err);
         config.onAuthFailure?.();
         return null;
       } finally {
@@ -151,8 +153,8 @@ function normalizeUser(raw) {
     first_name: raw.first_name,
     last_name: raw.last_name,
     is_active: raw.is_active ?? true,
-    is_verified: raw.is_verified ?? raw.email_verified ?? false,
-    email_verified: raw.email_verified ?? raw.is_verified ?? false,
+    is_verified: raw.email_verified ?? false,
+    email_verified: raw.email_verified ?? false,
     role: raw.role ?? "user",
     created_at: raw.created_at ?? ""
   };
@@ -181,19 +183,19 @@ function AuthProvider({ baseUrl, children, onAuthFailure, tokenStorage }) {
   });
   useEffect(() => {
     if (accessToken) {
-      api.auth.me().then((u) => setUser(normalizeUser(u))).catch(() => setUser(null)).finally(() => setIsLoading(false));
+      api.auth.me().then((u) => setUser(normalizeUser(u.data))).catch(() => setUser(null)).finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
     }
   }, []);
   const login = useCallback(async (email, password) => {
-    const data = await api.auth.login({ email, password });
-    setAccessToken(data.access_token);
-    setRefreshToken(data.refresh_token);
-    tokenStorage?.setAccessToken(data.access_token);
-    tokenStorage?.setRefreshToken(data.refresh_token);
+    const res = await api.auth.login({ email, password });
+    setAccessToken(res.data.access_token);
+    setRefreshToken(res.data.refresh_token);
+    tokenStorage?.setAccessToken(res.data.access_token);
+    tokenStorage?.setRefreshToken(res.data.refresh_token);
     const me = await api.auth.me();
-    setUser(normalizeUser(me));
+    setUser(normalizeUser(me.data));
   }, [api]);
   const register = useCallback(async (data) => {
     await api.auth.register(data);
